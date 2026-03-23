@@ -31,6 +31,17 @@
         if(tabName === 'config') loadConfig();
     }
 
+    // ---- Fetch helpers ----
+    function apiFetch(url, options) {
+        options = options || {};
+        options.headers = Object.assign({}, options.headers, {
+            'X-Requested-With': 'XMLHttpRequest',
+        });
+        if(options.body && !options.headers['Content-Type'])
+            options.headers['Content-Type'] = 'application/json';
+        return fetch(url, options);
+    }
+
     // ---- Dashboard ----
     function startHealthPolling() {
         fetchHealth();
@@ -59,6 +70,13 @@
         }
     }
 
+    function el(tag, className, text) {
+        const e = document.createElement(tag);
+        if(className) e.className = className;
+        if(text !== undefined) e.textContent = text;
+        return e;
+    }
+
     function updateDashboard(data) {
         // SMTP Status
         const smtpIcon = document.getElementById('smtp-icon');
@@ -83,27 +101,36 @@
 
         // Account Health Cards
         const container = document.getElementById('account-cards');
-        container.innerHTML = '';
+        while(container.firstChild) container.removeChild(container.firstChild);
+
         if(data.accounts.length === 0) {
-            container.innerHTML = '<p class="placeholder">No accounts configured</p>';
+            container.appendChild(el('p', 'placeholder', 'No accounts configured'));
             return;
         }
+
         data.accounts.forEach(acct => {
-            const card = document.createElement('div');
-            card.className = 'account-card';
+            const card = el('div', 'account-card');
+            card.appendChild(el('div', 'card-title', acct.name));
+
+            const body = el('div', 'card-body');
+
+            const tenantRow = el('div', 'detail-row');
+            tenantRow.appendChild(el('span', null, 'Tenant:'));
+            tenantRow.appendChild(el('span', null, acct.tenant));
+            body.appendChild(tenantRow);
+
+            const apiRow = el('div', 'detail-row');
+            apiRow.appendChild(el('span', null, 'Graph API:'));
             const iconClass = acct.graphApi.ok ? 'ok' : 'error';
             const statusText = acct.graphApi.ok ? 'Connected' : (acct.graphApi.error || 'Error');
-            card.innerHTML =
-                '<div class="card-title">' + escapeHtml(acct.name) + '</div>' +
-                '<div class="card-body">' +
-                    '<div class="detail-row">' +
-                        '<span>Tenant:</span><span>' + escapeHtml(acct.tenant) + '</span>' +
-                    '</div>' +
-                    '<div class="detail-row">' +
-                        '<span>Graph API:</span>' +
-                        '<span><span class="status-icon ' + iconClass + '">&#9679;</span> ' + escapeHtml(statusText) + '</span>' +
-                    '</div>' +
-                '</div>';
+            const statusSpan = el('span');
+            const icon = el('span', 'status-icon ' + iconClass, '\u25CF');
+            statusSpan.appendChild(icon);
+            statusSpan.appendChild(document.createTextNode(' ' + statusText));
+            apiRow.appendChild(statusSpan);
+            body.appendChild(apiRow);
+
+            card.appendChild(body);
             container.appendChild(card);
         });
     }
@@ -141,50 +168,48 @@
 
     function renderAccountsList(accounts) {
         const body = document.getElementById('accounts-rows');
-        body.innerHTML = '';
+        while(body.firstChild) body.removeChild(body.firstChild);
 
         if(accounts.length === 0) {
-            body.innerHTML = '<p class="placeholder">No accounts configured. Click "Add Account" to create one.</p>';
+            body.appendChild(el('p', 'placeholder', 'No accounts configured. Click "Add Account" to create one.'));
             return;
         }
 
         accounts.forEach(acct => {
-            const row = document.createElement('div');
-            row.className = 'listview-row';
+            const row = el('div', 'listview-row');
             const ipsText = acct.allowedIPs.length ? acct.allowedIPs.join(', ') : 'Any';
             const fromText = acct.allowedFrom.length ? acct.allowedFrom.join(', ') : 'Any';
-            row.innerHTML =
-                '<span class="col-name">' + escapeHtml(acct.name) + '</span>' +
-                '<span class="col-tenant">' + escapeHtml(acct.tenant) + '</span>' +
-                '<span class="col-auth">' + (acct.hasCertificate ? 'Cert' : 'Secret') + '</span>' +
-                '<span class="col-ips" title="' + escapeHtml(acct.allowedIPs.join(', ')) + '">' + escapeHtml(ipsText) + '</span>' +
-                '<span class="col-from" title="' + escapeHtml(acct.allowedFrom.join(', ')) + '">' + escapeHtml(fromText) + '</span>' +
-                '<span class="col-actions">' +
-                    '<button class="btn btn-test" data-name="' + escapeHtml(acct.name) + '">Test</button>' +
-                    '<button class="btn btn-edit" data-name="' + escapeHtml(acct.name) + '">Edit</button>' +
-                    '<button class="btn btn-delete" data-name="' + escapeHtml(acct.name) + '">Del</button>' +
-                '</span>';
-            body.appendChild(row);
-        });
 
-        // Event listeners
-        body.querySelectorAll('.btn-test').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                testAccount(btn.dataset.name);
-            });
-        });
-        body.querySelectorAll('.btn-edit').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                editAccount(btn.dataset.name);
-            });
-        });
-        body.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteAccount(btn.dataset.name);
-            });
+            row.appendChild(el('span', 'col-name', acct.name));
+            row.appendChild(el('span', 'col-tenant', acct.tenant));
+            row.appendChild(el('span', 'col-auth', acct.hasCertificate ? 'Cert' : 'Secret'));
+
+            const ipsSpan = el('span', 'col-ips', ipsText);
+            ipsSpan.title = acct.allowedIPs.join(', ');
+            row.appendChild(ipsSpan);
+
+            const fromSpan = el('span', 'col-from', fromText);
+            fromSpan.title = acct.allowedFrom.join(', ');
+            row.appendChild(fromSpan);
+
+            const actions = el('span', 'col-actions');
+            const btnTest = el('button', 'btn btn-test', 'Test');
+            btnTest.dataset.name = acct.name;
+            const btnEdit = el('button', 'btn btn-edit', 'Edit');
+            btnEdit.dataset.name = acct.name;
+            const btnDel = el('button', 'btn btn-delete', 'Del');
+            btnDel.dataset.name = acct.name;
+
+            btnTest.addEventListener('click', (e) => { e.stopPropagation(); testAccount(acct.name); });
+            btnEdit.addEventListener('click', (e) => { e.stopPropagation(); editAccount(acct.name, acct); });
+            btnDel.addEventListener('click', (e) => { e.stopPropagation(); deleteAccount(acct.name); });
+
+            actions.appendChild(btnTest);
+            actions.appendChild(btnEdit);
+            actions.appendChild(btnDel);
+            row.appendChild(actions);
+
+            body.appendChild(row);
         });
     }
 
@@ -202,37 +227,29 @@
         }
     }
 
-    async function editAccount(name) {
-        try {
-            const res = await fetch('/api/accounts?showSecrets=true');
-            const accounts = await res.json();
-            const acct = accounts.find(a => a.name === name);
-            if(!acct) { showAlert('Error', 'Account not found'); return; }
+    function editAccount(name, acct) {
+        editingAccount = name;
+        document.getElementById('dialog-title').textContent = 'Edit Account: ' + name;
+        document.getElementById('acct-name').value = acct.name;
+        document.getElementById('acct-tenant').value = acct.tenant;
+        document.getElementById('acct-client-id').value = acct.clientId;
+        // Show masked placeholder if account has a secret — user must retype to change
+        document.getElementById('acct-secret').value = acct.hasSecret ? '********' : '';
+        document.getElementById('acct-cert-thumbprint').value = '';
+        document.getElementById('acct-cert-key-path').value = '';
+        document.getElementById('acct-allowed-ips').value = acct.allowedIPs.join('\n');
+        document.getElementById('acct-allowed-from').value = acct.allowedFrom.join('\n');
+        document.getElementById('acct-force-mailbox').value = acct.forceMailbox || '';
+        document.getElementById('acct-retry-limit').value = acct.retryLimit;
+        document.getElementById('acct-retry-interval').value = acct.retryInterval;
 
-            editingAccount = name;
-            document.getElementById('dialog-title').textContent = 'Edit Account: ' + name;
-            document.getElementById('acct-name').value = acct.name;
-            document.getElementById('acct-tenant').value = acct.tenant;
-            document.getElementById('acct-client-id').value = acct.clientId;
-            document.getElementById('acct-secret').value = acct.secret || '';
-            document.getElementById('acct-cert-thumbprint').value = '';
-            document.getElementById('acct-cert-key-path').value = '';
-            document.getElementById('acct-allowed-ips').value = acct.allowedIPs.join('\n');
-            document.getElementById('acct-allowed-from').value = acct.allowedFrom.join('\n');
-            document.getElementById('acct-force-mailbox').value = acct.forceMailbox || '';
-            document.getElementById('acct-retry-limit').value = acct.retryLimit;
-            document.getElementById('acct-retry-interval').value = acct.retryInterval;
-
-            document.getElementById('account-dialog-overlay').classList.remove('hidden');
-        } catch(err) {
-            showAlert('Error', 'Failed to load account: ' + err.message);
-        }
+        document.getElementById('account-dialog-overlay').classList.remove('hidden');
     }
 
     async function deleteAccount(name) {
         if(!confirm('Delete account "' + name + '"? This requires a restart to take effect.')) return;
         try {
-            const res = await fetch('/api/accounts/' + encodeURIComponent(name), {method: 'DELETE'});
+            const res = await apiFetch('/api/accounts/' + encodeURIComponent(name), {method: 'DELETE'});
             const result = await res.json();
             if(result.success) {
                 showAlert('Success', result.message);
@@ -268,9 +285,8 @@
             : '/api/accounts';
 
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method,
-                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(account),
             });
             const result = await res.json();
@@ -336,14 +352,12 @@
 
     function renderConfigForm(config) {
         const container = document.getElementById('config-form');
-        container.innerHTML = '';
+        while(container.firstChild) container.removeChild(container.firstChild);
 
-        // Mode
         addConfigSection(container, 'Operation Mode', [
             {key: 'mode', label: 'Mode', type: 'select', options: ['full', 'receive', 'send'], value: config.mode},
         ]);
 
-        // SMTP (receive) settings
         if(config.receive) {
             addConfigSection(container, 'SMTP Server (Receive)', [
                 {key: 'receive.port', label: 'Port', type: 'number', value: config.receive.port || 25},
@@ -355,7 +369,6 @@
             ]);
         }
 
-        // HTTP Proxy
         if(config.httpProxy) {
             addConfigSection(container, 'HTTP Proxy', [
                 {key: 'httpProxy.host', label: 'Host', type: 'text', value: config.httpProxy.host || ''},
@@ -364,70 +377,82 @@
             ]);
         }
 
-        // WebUI settings
         if(config.webui) {
             addConfigSection(container, 'WebUI', [
                 {key: 'webui.enabled', label: 'Enabled', type: 'checkbox', value: config.webui.enabled || false},
                 {key: 'webui.port', label: 'Port', type: 'number', value: config.webui.port || 3000},
-                {key: 'webui.listenAddress', label: 'Listen Address', type: 'text', value: config.webui.listenAddress || '0.0.0.0'},
+                {key: 'webui.listenAddress', label: 'Listen Address', type: 'text', value: config.webui.listenAddress || '127.0.0.1'},
             ]);
         }
     }
 
     function addConfigSection(container, title, fields) {
-        const section = document.createElement('div');
-        section.className = 'group-box config-section';
-        let html = '<legend>' + escapeHtml(title) + '</legend>';
+        const section = el('div', 'group-box config-section');
+        const legend = el('legend', null, title);
+        section.appendChild(legend);
 
         fields.forEach(f => {
-            html += '<div class="form-group">';
-            html += '<label>' + escapeHtml(f.label) + ':</label>';
+            const group = el('div', 'form-group');
+            const label = el('label', null, f.label + ':');
+            group.appendChild(label);
 
+            let input;
             if(f.type === 'select') {
-                html += '<select class="field" data-key="' + f.key + '">';
+                input = document.createElement('select');
+                input.className = 'field';
+                input.dataset.key = f.key;
                 f.options.forEach(opt => {
-                    html += '<option value="' + opt + '"' + (opt === f.value ? ' selected' : '') + '>' + opt + '</option>';
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    if(opt === f.value) option.selected = true;
+                    input.appendChild(option);
                 });
-                html += '</select>';
             } else if(f.type === 'checkbox') {
-                html += '<input type="checkbox" data-key="' + f.key + '"' + (f.value ? ' checked' : '') + '>';
+                input = document.createElement('input');
+                input.type = 'checkbox';
+                input.dataset.key = f.key;
+                input.checked = Boolean(f.value);
             } else {
-                html += '<input type="' + f.type + '" class="field" data-key="' + f.key + '" value="' + escapeHtml(String(f.value || '')) + '">';
+                input = document.createElement('input');
+                input.type = f.type;
+                input.className = 'field';
+                input.dataset.key = f.key;
+                input.value = String(f.value !== undefined ? f.value : '');
             }
 
-            html += '</div>';
+            group.appendChild(input);
+            section.appendChild(group);
         });
 
-        section.innerHTML = html;
         container.appendChild(section);
     }
 
     document.getElementById('btn-save-config').addEventListener('click', async () => {
         try {
-            // Read current config with secrets, then apply form changes
-            const res = await fetch('/api/config?showSecrets=true');
+            // Read current config (masked), then apply form changes
+            // Server will preserve any '********' secrets from disk
+            const res = await fetch('/api/config');
             const config = await res.json();
 
-            // Apply form values
-            document.querySelectorAll('#config-form [data-key]').forEach(el => {
-                const keys = el.dataset.key.split('.');
+            document.querySelectorAll('#config-form [data-key]').forEach(elem => {
+                const keys = elem.dataset.key.split('.');
                 let obj = config;
                 for(let i = 0; i < keys.length - 1; i++) {
                     if(!obj[keys[i]]) obj[keys[i]] = {};
                     obj = obj[keys[i]];
                 }
                 const lastKey = keys[keys.length - 1];
-                if(el.type === 'checkbox')
-                    obj[lastKey] = el.checked;
-                else if(el.type === 'number')
-                    obj[lastKey] = el.value ? parseInt(el.value) : undefined;
+                if(elem.type === 'checkbox')
+                    obj[lastKey] = elem.checked;
+                else if(elem.type === 'number')
+                    obj[lastKey] = elem.value ? parseInt(elem.value) : undefined;
                 else
-                    obj[lastKey] = el.value || undefined;
+                    obj[lastKey] = elem.value || undefined;
             });
 
-            const saveRes = await fetch('/api/config', {
+            const saveRes = await apiFetch('/api/config', {
                 method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(config),
             });
             const result = await saveRes.json();
@@ -480,12 +505,6 @@
         if(d > 0) return d + 'd ' + h + 'h ' + m + 'm';
         if(h > 0) return h + 'h ' + m + 'm';
         return m + 'm';
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     // ---- Init ----

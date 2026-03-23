@@ -205,7 +205,7 @@ export class SMTPServer
                         fs.writeFileSync(metaFile, JSON.stringify({
                             accountName: matchedAccount.name,
                             clientIp: session.remoteAddress,
-                            fromAddress: session.envelope.mailFrom?.address,
+                            fromAddress: (session.envelope.mailFrom || undefined)?.address,
                             timestamp: new Date().toISOString(),
                         }));
                     } catch(error) {

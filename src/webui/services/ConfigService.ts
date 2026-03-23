@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { randomBytes } from 'crypto';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import Ajv from 'ajv';
 
@@ -13,12 +14,13 @@ export class ConfigService
         this.#schemaFile = schemaFile;
     }
 
-    getConfig(showSecrets: boolean = false): any
+    /** Get config, always with secrets masked unless internal=true */
+    getConfig(internal: boolean = false): any
     {
         const content = fs.readFileSync(this.#configFile, 'utf-8');
         const config = parseYaml(content);
 
-        if(!showSecrets)
+        if(!internal)
             this.#maskSecrets(config);
 
         return config;
@@ -32,6 +34,14 @@ export class ConfigService
 
     updateConfig(newConfig: any): {success: boolean, errors?: string[]}
     {
+        // Preserve secrets where masked placeholder was submitted
+        try {
+            const current = this.getConfig(true);
+            this.#preserveMaskedSecrets(newConfig, current);
+        } catch {
+            // If we can't read current config (e.g. first save), proceed
+        }
+
         // Validate against JSON schema
         try {
             const schema = this.getSchema();
@@ -50,14 +60,52 @@ export class ConfigService
             return {success: false, errors: [`Schema validation error: ${String(error)}`]};
         }
 
-        // Write YAML
+        // Atomic write: write to tmp file then rename
+        const tmpPath = this.#configFile + '.tmp.' + randomBytes(4).toString('hex');
         try {
             const yamlContent = stringifyYaml(newConfig, {indent: 2});
-            fs.writeFileSync(this.#configFile, yamlContent, 'utf-8');
+            fs.writeFileSync(tmpPath, yamlContent, 'utf-8');
+            fs.renameSync(tmpPath, this.#configFile);
             return {success: true};
         } catch(error) {
+            try { fs.unlinkSync(tmpPath); } catch {}
             return {success: false, errors: [`Failed to write config: ${String(error)}`]};
         }
+    }
+
+    #preserveMaskedSecrets(newConfig: any, current: any)
+    {
+        // Legacy send.appReg.secret
+        if(newConfig?.send?.appReg?.secret === '********' && current?.send?.appReg?.secret)
+            newConfig.send.appReg.secret = current.send.appReg.secret;
+
+        // Per-account secrets
+        if(newConfig?.accounts && current?.accounts)
+        {
+            for(const account of newConfig.accounts)
+            {
+                if(account?.appReg?.secret !== '********') continue;
+                const existing = current.accounts.find((a: any) => a.name === account.name);
+                if(existing?.appReg?.secret)
+                    account.appReg.secret = existing.appReg.secret;
+            }
+        }
+
+        // SMTP user passwords
+        if(newConfig?.receive?.users && current?.receive?.users)
+        {
+            for(const user of newConfig.receive.users)
+            {
+                if(user?.password !== '********') continue;
+                const existing = current.receive.users.find((u: any) => u.username === user.username);
+                if(existing?.password)
+                    user.password = existing.password;
+            }
+        }
+
+        // WebUI password
+        if(newConfig?.webui?.password === '********' && current?.webui?.password)
+            newConfig.webui.password = current.webui.password;
     }
 
     #maskSecrets(config: any)

@@ -1,16 +1,18 @@
 import { Router } from 'express';
 import { ConfigService } from '../services/ConfigService';
+import { prefixedLog } from '../../classes/Logger';
+
+const log = prefixedLog('WebUI');
 
 export function configRoutes(): Router
 {
     const router = Router();
     const configService = new ConfigService();
 
-    // Get current config
+    // Get current config (secrets always masked)
     router.get('/config', (req, res) => {
         try {
-            const showSecrets = req.query.showSecrets === 'true';
-            const config = configService.getConfig(showSecrets);
+            const config = configService.getConfig();
             res.json(config);
         } catch(error) {
             res.status(500).json({error: 'Failed to read config'});
@@ -22,7 +24,10 @@ export function configRoutes(): Router
         try {
             const result = configService.updateConfig(req.body);
             if(result.success)
+            {
+                log('info', `Config updated by ${req.ip}`);
                 res.json({success: true, message: 'Config saved. Restart required for changes to take effect.'});
+            }
             else
                 res.status(400).json({success: false, errors: result.errors});
         } catch(error) {

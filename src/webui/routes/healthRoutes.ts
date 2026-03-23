@@ -44,7 +44,8 @@ export function healthRoutes(queue: MailQueue, smtpServer: SMTPServer): Router
 
     // Recent log entries
     router.get('/logs', (req, res) => {
-        const lines = parseInt(req.query.lines as string) || 100;
+        const rawLines = parseInt(req.query.lines as string) || 100;
+        const lines = Math.min(Math.max(rawLines, 1), 1000);
         const logFile = path.join('logs', 'combined.log');
 
         try {

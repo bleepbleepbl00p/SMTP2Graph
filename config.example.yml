@@ -107,12 +107,14 @@ receive:
 #       - notifications@fabrikam.com
 
 # Optional: WebUI for configuration management and health monitoring
+# WARNING: The WebUI uses Basic Auth. You MUST place it behind a TLS-terminating
+# reverse proxy (Traefik, Caddy, nginx) or bind to localhost only (listenAddress: 127.0.0.1).
 # webui:
 #   enabled: true
 #   port: 3000
-#   listenAddress: 127.0.0.1  # Use 0.0.0.0 for Docker or remote access
+#   listenAddress: 127.0.0.1  # Default. Use 0.0.0.0 only behind a TLS reverse proxy
 #   username: admin
-#   password: changeme
+#   password: changeme  # minimum 8 characters
 
 # Optional: HTTP proxy to use for outgoing communication
 httpProxy:

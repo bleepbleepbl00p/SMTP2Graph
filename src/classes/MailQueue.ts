@@ -113,7 +113,7 @@ export class MailQueue
 
         if(!account)
         {
-            log('error', `No relay account available for "${filename}"`);
+            log('warn', `No relay account available for "${filename}"`);
             return;
         }
 

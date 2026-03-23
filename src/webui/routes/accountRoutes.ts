@@ -2,15 +2,17 @@ import { Router } from 'express';
 import { Config } from '../../classes/Config';
 import { Mailer } from '../../classes/Mailer';
 import { ConfigService } from '../services/ConfigService';
+import { prefixedLog } from '../../classes/Logger';
+
+const log = prefixedLog('WebUI');
 
 export function accountRoutes(): Router
 {
     const router = Router();
     const configService = new ConfigService();
 
-    // List all accounts
+    // List all accounts (secrets never exposed)
     router.get('/accounts', (req, res) => {
-        const showSecrets = req.query.showSecrets === 'true';
         const accounts = Config.accounts.map(account => ({
             name: account.name,
             tenant: account.appReg.tenant,
@@ -22,8 +24,6 @@ export function accountRoutes(): Router
             forceMailbox: account.forceMailbox,
             retryLimit: account.retryLimit ?? 3,
             retryInterval: account.retryInterval ?? 5,
-            // Only show secrets if requested
-            ...(showSecrets ? {secret: account.appReg.secret} : {}),
         }));
         res.json(accounts);
     });
@@ -49,7 +49,10 @@ export function accountRoutes(): Router
             config.accounts.push(req.body);
             const result = configService.updateConfig(config);
             if(result.success)
+            {
+                log('info', `Account "${req.body.name}" created by ${req.ip}`);
                 res.json({success: true, message: 'Account added. Restart required.'});
+            }
             else
                 res.status(400).json({success: false, errors: result.errors});
         } catch(error) {
@@ -68,10 +71,16 @@ export function accountRoutes(): Router
                 res.status(404).json({error: `Account "${req.params.name}" not found`});
                 return;
             }
+            // Preserve existing secret if masked placeholder sent
+            if(req.body.appReg?.secret === '********' && config.accounts[idx]?.appReg?.secret)
+                req.body.appReg.secret = config.accounts[idx].appReg.secret;
             config.accounts[idx] = req.body;
             const result = configService.updateConfig(config);
             if(result.success)
+            {
+                log('info', `Account "${req.params.name}" updated by ${req.ip}`);
                 res.json({success: true, message: 'Account updated. Restart required.'});
+            }
             else
                 res.status(400).json({success: false, errors: result.errors});
         } catch(error) {
@@ -97,7 +106,10 @@ export function accountRoutes(): Router
             config.accounts.splice(idx, 1);
             const result = configService.updateConfig(config);
             if(result.success)
+            {
+                log('warn', `Account "${req.params.name}" deleted by ${req.ip}`);
                 res.json({success: true, message: 'Account removed. Restart required.'});
+            }
             else
                 res.status(400).json({success: false, errors: result.errors});
         } catch(error) {

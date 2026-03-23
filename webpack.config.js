@@ -33,10 +33,12 @@ module.exports = (env, argv) => ({
     resolve: {
         extensions: ['.ts', '.js'],
     },
-    // Express and ajv must be loaded at runtime (not bundled)
+    // Runtime dependencies — not bundled by webpack
     externals: {
         'express': 'commonjs express',
         'ajv': 'commonjs ajv',
+        'helmet': 'commonjs helmet',
+        'express-rate-limit': 'commonjs express-rate-limit',
     },
     plugins: [
         new webpack.DefinePlugin({

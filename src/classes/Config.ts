@@ -286,7 +286,7 @@ export class Config
 
     static get webuiListenAddress(): string
     {
-        return this.#config.webui?.listenAddress ?? '0.0.0.0';
+        return this.#config.webui?.listenAddress ?? '127.0.0.1';
     }
 
     static get webuiUsername(): string | undefined
@@ -478,7 +478,7 @@ export class Config
 
     static get httpProxyPassword()
     {
-        return this.#config.httpProxy?.username;
+        return this.#config.httpProxy?.password;
     }
 
     static get httpProxyConfig(): AxiosProxyConfig | undefined
