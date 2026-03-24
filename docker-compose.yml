@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  smtp2graph:
+    build:
+      context: .
+      args:
+        VERSION: "1.1.4"
+    image: smtp2graph:latest
+    container_name: smtp2graph
+    restart: unless-stopped
+    ports:
+      # SMTP relay
+      - "587:587"
+      # WebUI (only active when webui.enabled = true in config.yml)
+      - "3000:3000"
+    volumes:
+      # Mount your config directory — must contain config.yml
+      # Optionally include TLS certs, client keys, etc.
+      - ./data:/data
+    environment:
+      # Override config path if needed (default: /data/config.yml)
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "587"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
