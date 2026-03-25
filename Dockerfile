@@ -10,12 +10,8 @@ ENV NODE_PATH=/opt/smtp2graph/node_modules
 
 # Add SMTP2Graph binary
 COPY dist/server.js /bin/smtp2graph.js
-COPY docker/startup.sh /bin/
-COPY docker/test.sh /bin/
-
-# Set execute permissions
-RUN chmod +x /bin/startup.sh
-RUN chmod +x /bin/test.sh
+COPY --chmod=755 docker/startup.sh /bin/
+COPY --chmod=755 docker/test.sh /bin/
 
 # Add non-root user and set up data directory
 RUN addgroup -S smtp2graph && adduser -S smtp2graph -G smtp2graph
