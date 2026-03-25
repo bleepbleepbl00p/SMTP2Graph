@@ -100,6 +100,22 @@ export class WebServer
             }
         });
 
+        // Rate limiting — mutation endpoints (tighter)
+        this.#app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+            if(['GET', 'HEAD', 'OPTIONS'].includes(req.method))
+                return next();
+            next();
+        });
+        const mutationLimiter = rateLimit({
+            windowMs: 60 * 1000, // 1 minute
+            max: 10,
+            standardHeaders: true,
+            legacyHeaders: false,
+            message: 'Too many modification requests, please slow down.',
+            skip: (req: Request) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+        });
+        this.#app.use('/api', mutationLimiter);
+
         // CSRF protection: require custom header on state-changing requests
         this.#app.use((req: Request, res: Response, next: NextFunction) => {
             if(['GET', 'HEAD', 'OPTIONS'].includes(req.method))

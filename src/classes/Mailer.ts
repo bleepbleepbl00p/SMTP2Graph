@@ -209,7 +209,20 @@ export class Mailer
             await this.#aquireToken(account);
             return {ok: true};
         } catch(error: any) {
-            return {ok: false, error: String(error)};
+            // Sanitize error — don't expose raw Azure/MSAL error details
+            const raw = String(error);
+            let safeError = 'Authentication failed';
+            if(raw.includes('AADSTS700016'))
+                safeError = 'Application not found in tenant';
+            else if(raw.includes('AADSTS7000215'))
+                safeError = 'Invalid client secret';
+            else if(raw.includes('AADSTS700027') || raw.includes('certificate'))
+                safeError = 'Certificate validation failed';
+            else if(raw.includes('AADSTS90002'))
+                safeError = 'Tenant not found';
+            else if(raw.includes('ENOTFOUND') || raw.includes('ECONNREFUSED'))
+                safeError = 'Network error — cannot reach authentication endpoint';
+            return {ok: false, error: safeError};
         }
     }
 

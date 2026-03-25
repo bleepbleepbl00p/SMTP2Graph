@@ -33,7 +33,7 @@ export function accountRoutes(): Router
         const account = Config.accounts.find(a => a.name === req.params.name);
         if(!account)
         {
-            res.status(404).json({error: `Account "${req.params.name}" not found`});
+            res.status(404).json({error: 'Account not found'});
             return;
         }
 
@@ -68,7 +68,7 @@ export function accountRoutes(): Router
             const idx = config.accounts.findIndex((a: any) => a.name === req.params.name);
             if(idx === -1)
             {
-                res.status(404).json({error: `Account "${req.params.name}" not found`});
+                res.status(404).json({error: 'Account not found'});
                 return;
             }
             // Preserve existing secret if masked placeholder sent
@@ -100,7 +100,7 @@ export function accountRoutes(): Router
             const idx = config.accounts.findIndex((a: any) => a.name === req.params.name);
             if(idx === -1)
             {
-                res.status(404).json({error: `Account "${req.params.name}" not found`});
+                res.status(404).json({error: 'Account not found'});
                 return;
             }
             config.accounts.splice(idx, 1);
