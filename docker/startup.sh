@@ -9,4 +9,4 @@ if [ ! -f "$CFGFILE" ]; then
 fi
 
 # Run SMTP2Graph
-exec node /bin/smtp2graph.js --receive.port=587
+exec node /usr/local/bin/smtp2graph.js --receive.port=587
