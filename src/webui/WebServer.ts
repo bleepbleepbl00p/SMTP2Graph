@@ -5,6 +5,7 @@ import { Config } from '../classes/Config';
 import { prefixedLog } from '../classes/Logger';
 import { MailQueue } from '../classes/MailQueue';
 import { SMTPServer } from '../classes/SMTPServer';
+import { ConfigService } from './services/ConfigService';
 import { configRoutes } from './routes/configRoutes';
 import { healthRoutes } from './routes/healthRoutes';
 import { accountRoutes } from './routes/accountRoutes';
@@ -14,13 +15,15 @@ const log = prefixedLog('WebUI');
 export class WebServer
 {
     #app: express.Application;
-    #queue: MailQueue;
-    #smtpServer: SMTPServer;
+    #queue: MailQueue | null;
+    #smtpServer: SMTPServer | null;
+    #setupMode: boolean;
 
-    constructor(queue: MailQueue, smtpServer: SMTPServer)
+    constructor(queue: MailQueue | null, smtpServer: SMTPServer | null)
     {
         this.#queue = queue;
         this.#smtpServer = smtpServer;
+        this.#setupMode = (queue === null || smtpServer === null);
         this.#app = express();
 
         this.#setupMiddleware();
@@ -105,10 +108,64 @@ export class WebServer
 
     #setupRoutes()
     {
-        // API routes
+        // Always mount config and account routes (needed for setup wizard)
         this.#app.use('/api', configRoutes());
-        this.#app.use('/api', healthRoutes(this.#queue, this.#smtpServer));
         this.#app.use('/api', accountRoutes());
+
+        // Setup status endpoint — always available
+        this.#app.get('/api/setup-status', (_req, res) => {
+            res.json({ setupMode: this.#setupMode });
+        });
+
+        if(this.#setupMode)
+        {
+            // Minimal health endpoint for setup mode
+            this.#app.get('/api/health', (_req, res) => {
+                res.json({
+                    setupMode: true,
+                    smtp: { status: 'not started', message: 'Complete setup to start SMTP relay' },
+                    accounts: [],
+                    queue: { queued: 0, retrying: 0, failed: 0, inProgress: 0 },
+                    uptime: process.uptime(),
+                    version: VERSION,
+                });
+            });
+
+            // Setup complete endpoint — validates config and restarts
+            this.#app.post('/api/setup/complete', async (_req, res) => {
+                try {
+                    const configService = new ConfigService();
+                    const config = configService.getConfig(true);
+
+                    const hasAccounts = config.accounts && Array.isArray(config.accounts) && config.accounts.length > 0;
+                    const hasSendConfig = config.send?.appReg?.tenant && config.send?.appReg?.id;
+                    const isReceiveOnly = config.mode === 'receive';
+
+                    if(!hasAccounts && !hasSendConfig && !isReceiveOnly)
+                    {
+                        res.status(400).json({
+                            error: 'Configuration incomplete',
+                            missing: 'Add at least one relay account or configure send.appReg with tenant and client ID',
+                        });
+                        return;
+                    }
+
+                    res.json({ success: true, message: 'Configuration complete. Restarting...' });
+
+                    setTimeout(() => {
+                        log('info', 'Setup complete — restarting with full configuration...');
+                        process.exit(0);
+                    }, 1000);
+                } catch(err) {
+                    res.status(500).json({ error: 'Failed to validate configuration' });
+                }
+            });
+        }
+        else
+        {
+            // Full health routes — only available in normal mode
+            this.#app.use('/api', healthRoutes(this.#queue!, this.#smtpServer!));
+        }
 
         // Static files — serve embedded HTML/JS/CSS
         this.#app.get('/', (req, res) => {

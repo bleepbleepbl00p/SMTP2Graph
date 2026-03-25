@@ -507,6 +507,335 @@
         return m + 'm';
     }
 
+    // ---- Setup Wizard ----
+    async function checkSetupMode() {
+        try {
+            const res = await fetch('/api/setup-status');
+            const data = await res.json();
+            if(data.setupMode) {
+                showSetupWizard();
+                return true;
+            }
+        } catch(e) {
+            // If endpoint doesn't exist, we're in normal mode
+        }
+        return false;
+    }
+
+    function showSetupWizard() {
+        document.querySelector('.tab-bar').style.display = 'none';
+        document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+        document.querySelector('.title-bar-text').textContent = 'SMTP2Graph — Setup Wizard';
+        const wizard = document.getElementById('setup-wizard');
+        if(wizard) wizard.style.display = 'block';
+        initSetupWizard();
+    }
+
+    function initSetupWizard() {
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        renderStep(currentStep);
+
+        document.getElementById('wizard-next').addEventListener('click', async () => {
+            if(await validateStep(currentStep)) {
+                currentStep++;
+                if(currentStep > totalSteps) {
+                    await completeSetup();
+                } else {
+                    renderStep(currentStep);
+                }
+            }
+        });
+
+        document.getElementById('wizard-back').addEventListener('click', () => {
+            if(currentStep > 1) {
+                currentStep--;
+                renderStep(currentStep);
+            }
+        });
+    }
+
+    function renderStep(step) {
+        const content = document.getElementById('wizard-content');
+        const backBtn = document.getElementById('wizard-back');
+        const nextBtn = document.getElementById('wizard-next');
+        const stepIndicator = document.getElementById('wizard-step');
+
+        backBtn.style.display = step === 1 ? 'none' : '';
+        nextBtn.textContent = step === 4 ? 'Complete Setup' : 'Next >';
+        stepIndicator.textContent = 'Step ' + step + ' of 4';
+
+        switch(step) {
+            case 1: content.innerHTML = buildStep1_Welcome(); break;
+            case 2: content.innerHTML = buildStep2_Account(); break;
+            case 3: content.innerHTML = buildStep3_SMTP(); break;
+            case 4: content.innerHTML = buildStep4_Review(); break;
+        }
+
+        if(step === 2) {
+            setTimeout(() => {
+                const certRadio = document.getElementById('setup-auth-cert');
+                const secretRadio = document.getElementById('setup-auth-secret');
+                const certFields = document.getElementById('setup-cert-fields');
+                const secretFields = document.getElementById('setup-secret-fields');
+                if(certRadio && secretRadio) {
+                    certRadio.addEventListener('change', () => {
+                        certFields.style.display = '';
+                        secretFields.style.display = 'none';
+                    });
+                    secretRadio.addEventListener('change', () => {
+                        certFields.style.display = 'none';
+                        secretFields.style.display = '';
+                    });
+                }
+            }, 0);
+        }
+
+        if(step === 3) {
+            setTimeout(() => {
+                const authCheck = document.getElementById('setup-smtp-auth');
+                const authFields = document.getElementById('setup-smtp-auth-fields');
+                if(authCheck) {
+                    authCheck.addEventListener('change', () => {
+                        authFields.style.display = authCheck.checked ? '' : 'none';
+                    });
+                }
+            }, 0);
+        }
+
+        if(step === 4) {
+            setTimeout(() => populateReview(), 0);
+        }
+    }
+
+    function buildStep1_Welcome() {
+        return '<fieldset class="group-box"><legend>Welcome to SMTP2Graph</legend>' +
+            '<p style="margin: 8px 0;">This wizard will help you configure your SMTP relay.</p>' +
+            '<p style="margin: 8px 0;">First, set your WebUI admin credentials:</p>' +
+            '<div style="margin: 8px 0;"><label>Username:</label><br>' +
+            '<input type="text" id="setup-webui-user" value="admin" style="width: 200px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Password:</label><br>' +
+            '<input type="password" id="setup-webui-pass" style="width: 200px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Confirm Password:</label><br>' +
+            '<input type="password" id="setup-webui-pass-confirm" style="width: 200px;"></div>' +
+            '</fieldset>';
+    }
+
+    function buildStep2_Account() {
+        return '<fieldset class="group-box"><legend>Microsoft Graph Relay Account</legend>' +
+            '<p style="margin: 8px 0;">Enter your Azure App Registration details:</p>' +
+            '<div style="margin: 8px 0;"><label>Account Name:</label><br>' +
+            '<input type="text" id="setup-acct-name" placeholder="e.g. contoso-relay" style="width: 250px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Tenant (name or GUID):</label><br>' +
+            '<input type="text" id="setup-acct-tenant" placeholder="e.g. contoso or GUID" style="width: 250px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Application (Client) ID:</label><br>' +
+            '<input type="text" id="setup-acct-clientid" placeholder="01234567-89ab-cdef-0123-456789abcdef" style="width: 320px;"></div>' +
+            '<fieldset class="group-box" style="margin-top: 12px;"><legend>Authentication Method</legend>' +
+            '<div style="margin: 4px 0;"><input type="radio" name="setup-auth-method" id="setup-auth-cert" value="certificate" checked>' +
+            '<label for="setup-auth-cert">Certificate</label></div>' +
+            '<div id="setup-cert-fields" style="margin: 8px 0 8px 20px;">' +
+            '<label>Certificate Thumbprint:</label><br>' +
+            '<input type="text" id="setup-acct-thumbprint" style="width: 320px;"><br>' +
+            '<label>Private Key Path (in /data):</label><br>' +
+            '<input type="text" id="setup-acct-keypath" placeholder="client.key" style="width: 250px;"></div>' +
+            '<div style="margin: 4px 0;"><input type="radio" name="setup-auth-method" id="setup-auth-secret" value="secret">' +
+            '<label for="setup-auth-secret">Client Secret</label></div>' +
+            '<div id="setup-secret-fields" style="margin: 8px 0 8px 20px; display: none;">' +
+            '<label>Client Secret:</label><br>' +
+            '<input type="password" id="setup-acct-secret" style="width: 320px;"></div>' +
+            '</fieldset>' +
+            '<div style="margin: 8px 0;"><label>Force Mailbox (optional):</label><br>' +
+            '<input type="text" id="setup-acct-mailbox" placeholder="smtp-relay@contoso.com" style="width: 250px;"></div>' +
+            '</fieldset>';
+    }
+
+    function buildStep3_SMTP() {
+        return '<fieldset class="group-box"><legend>SMTP Server Settings</legend>' +
+            '<div style="margin: 8px 0;"><label>SMTP Port:</label><br>' +
+            '<input type="number" id="setup-smtp-port" value="587" style="width: 80px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Listen Address:</label><br>' +
+            '<input type="text" id="setup-smtp-listen" value="0.0.0.0" style="width: 150px;"></div>' +
+            '<div style="margin: 8px 0;"><input type="checkbox" id="setup-smtp-auth">' +
+            '<label for="setup-smtp-auth">Require SMTP Authentication</label></div>' +
+            '<div id="setup-smtp-auth-fields" style="margin: 8px 0 8px 20px; display: none;">' +
+            '<label>SMTP Username:</label><br><input type="text" id="setup-smtp-user" style="width: 200px;"><br>' +
+            '<label>SMTP Password:</label><br><input type="password" id="setup-smtp-pass" style="width: 200px;"></div>' +
+            '<div style="margin: 8px 0;"><label>Max Message Size:</label><br>' +
+            '<input type="text" id="setup-smtp-maxsize" value="25m" style="width: 80px;"></div>' +
+            '</fieldset>';
+    }
+
+    function buildStep4_Review() {
+        return '<fieldset class="group-box"><legend>Review Configuration</legend>' +
+            '<p style="margin: 8px 0;">Please review your settings before completing setup:</p>' +
+            '<div id="setup-review-content" style="font-family: monospace; font-size: 11px;' +
+            ' background: white; border: 2px inset #c0c0c0; padding: 8px;' +
+            ' max-height: 300px; overflow-y: auto;"></div>' +
+            '<p style="margin: 8px 0; color: #800000;">' +
+            '<b>Note:</b> The container will restart after setup to apply the configuration.</p>' +
+            '</fieldset>';
+    }
+
+    function populateReview() {
+        const reviewEl = document.getElementById('setup-review-content');
+        if(!reviewEl) return;
+
+        const lines = [];
+        lines.push('<b>WebUI</b>');
+        lines.push('  Username: ' + (document.getElementById('setup-webui-user')?.value || 'admin'));
+        lines.push('  Password: ' + '********');
+        lines.push('');
+        lines.push('<b>Relay Account</b>');
+        lines.push('  Name: ' + (document.getElementById('setup-acct-name')?.value || 'default'));
+        lines.push('  Tenant: ' + (document.getElementById('setup-acct-tenant')?.value || '(not set)'));
+        lines.push('  Client ID: ' + (document.getElementById('setup-acct-clientid')?.value || '(not set)'));
+
+        const authMethod = document.querySelector('input[name="setup-auth-method"]:checked')?.value;
+        if(authMethod === 'certificate') {
+            lines.push('  Auth: Certificate');
+            lines.push('  Thumbprint: ' + (document.getElementById('setup-acct-thumbprint')?.value || '(not set)'));
+            lines.push('  Key Path: ' + (document.getElementById('setup-acct-keypath')?.value || '(not set)'));
+        } else {
+            lines.push('  Auth: Client Secret');
+            lines.push('  Secret: ' + '********');
+        }
+
+        lines.push('');
+        lines.push('<b>SMTP Server</b>');
+        lines.push('  Port: ' + (document.getElementById('setup-smtp-port')?.value || '587'));
+        lines.push('  Listen: ' + (document.getElementById('setup-smtp-listen')?.value || '0.0.0.0'));
+        lines.push('  Auth Required: ' + (document.getElementById('setup-smtp-auth')?.checked ? 'Yes' : 'No'));
+        lines.push('  Max Size: ' + (document.getElementById('setup-smtp-maxsize')?.value || '25m'));
+
+        reviewEl.innerHTML = lines.join('<br>');
+    }
+
+    async function validateStep(step) {
+        switch(step) {
+            case 1: {
+                const pass = document.getElementById('setup-webui-pass').value;
+                const confirm = document.getElementById('setup-webui-pass-confirm').value;
+                if(pass.length < 8) {
+                    showAlert('Validation Error', 'Password must be at least 8 characters.');
+                    return false;
+                }
+                if(pass !== confirm) {
+                    showAlert('Validation Error', 'Passwords do not match.');
+                    return false;
+                }
+                return true;
+            }
+            case 2: {
+                const tenant = document.getElementById('setup-acct-tenant').value;
+                const clientId = document.getElementById('setup-acct-clientid').value;
+                if(!tenant || !clientId) {
+                    showAlert('Validation Error', 'Tenant and Client ID are required.');
+                    return false;
+                }
+                return true;
+            }
+            case 3:
+                return true;
+            case 4:
+                return true;
+        }
+        return true;
+    }
+
+    async function completeSetup() {
+        const authMethod = document.querySelector('input[name="setup-auth-method"]:checked')?.value;
+
+        const account = {
+            name: document.getElementById('setup-acct-name')?.value || 'default',
+            appReg: {
+                tenant: document.getElementById('setup-acct-tenant')?.value,
+                id: document.getElementById('setup-acct-clientid')?.value,
+            }
+        };
+
+        if(authMethod === 'certificate') {
+            account.appReg.certificate = {
+                thumbprint: document.getElementById('setup-acct-thumbprint')?.value,
+                privateKeyPath: document.getElementById('setup-acct-keypath')?.value,
+            };
+        } else {
+            account.appReg.secret = document.getElementById('setup-acct-secret')?.value;
+        }
+
+        const mailbox = document.getElementById('setup-acct-mailbox')?.value;
+        if(mailbox) account.forceMailbox = mailbox;
+
+        const config = {
+            mode: 'full',
+            accounts: [account],
+            receive: {
+                port: parseInt(document.getElementById('setup-smtp-port')?.value) || 587,
+                listenAddress: document.getElementById('setup-smtp-listen')?.value || '0.0.0.0',
+                maxSize: document.getElementById('setup-smtp-maxsize')?.value || '25m',
+            },
+            webui: {
+                enabled: true,
+                port: 3000,
+                listenAddress: '0.0.0.0',
+                username: document.getElementById('setup-webui-user')?.value || 'admin',
+                password: document.getElementById('setup-webui-pass')?.value,
+            },
+        };
+
+        if(document.getElementById('setup-smtp-auth')?.checked) {
+            config.receive.requireAuth = true;
+            config.receive.users = [{
+                username: document.getElementById('setup-smtp-user')?.value,
+                password: document.getElementById('setup-smtp-pass')?.value,
+            }];
+        }
+
+        try {
+            const saveRes = await apiFetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config),
+            });
+
+            if(!saveRes.ok) {
+                const err = await saveRes.json();
+                showAlert('Error', 'Failed to save config: ' + (err.error || (err.errors && err.errors.join('\n')) || 'Unknown error'));
+                return;
+            }
+
+            const completeRes = await apiFetch('/api/setup/complete', { method: 'POST' });
+            const result = await completeRes.json();
+
+            if(completeRes.ok) {
+                document.getElementById('wizard-content').innerHTML =
+                    '<fieldset class="group-box"><legend>Setup Complete</legend>' +
+                    '<p style="margin: 16px 8px; text-align: center; font-size: 14px;">' +
+                    '<b>Configuration saved successfully!</b><br><br>' +
+                    'The container is restarting...<br>This page will reload automatically.</p></fieldset>';
+                document.getElementById('wizard-next').style.display = 'none';
+                document.getElementById('wizard-back').style.display = 'none';
+
+                setTimeout(function pollRestart() {
+                    fetch('/api/setup-status')
+                        .then(r => r.json())
+                        .then(data => {
+                            if(!data.setupMode) window.location.reload();
+                            else setTimeout(pollRestart, 2000);
+                        })
+                        .catch(() => setTimeout(pollRestart, 2000));
+                }, 3000);
+            } else {
+                showAlert('Error', result.error || 'Setup completion failed');
+            }
+        } catch(e) {
+            showAlert('Error', 'Network error: ' + e.message);
+        }
+    }
+
     // ---- Init ----
-    switchTab('dashboard');
+    (async function init() {
+        const isSetup = await checkSetupMode();
+        if(!isSetup) switchTab('dashboard');
+    })();
 })();

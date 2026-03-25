@@ -140,7 +140,7 @@ export class Config
                     throw new InvalidConfig(`Account "${account.name}": retryInterval must be >= 1`);
             }
         }
-        else if(this.mode !== 'receive') // Legacy single-account validation
+        else if(this.mode !== 'receive' && !this.setupMode) // Legacy single-account validation
         {
             if(!isStringValue(this.clientId))
                 throw new InvalidConfig('Missing "appReg.id" property');
@@ -194,6 +194,30 @@ export class Config
             throw new InvalidConfig(`Property "httpProxy.username" is defined without "httpProxy.password"`);
         else if(this.#config.httpProxy?.password && !this.#config.httpProxy.username)
             throw new InvalidConfig(`Property "httpProxy.password" is defined without "httpProxy.username"`);
+    }
+
+    /**
+     * Returns true if the config is missing required send/accounts configuration.
+     * In setup mode, only the WebUI should start.
+     */
+    static get setupMode(): boolean
+    {
+        const data = this.#configData;
+        if(!data) return true;
+
+        // Has multi-account config?
+        if(data.accounts && Array.isArray(data.accounts) && data.accounts.length > 0)
+            return false;
+
+        // Has single-account send config?
+        if(data.send?.appReg?.tenant && data.send?.appReg?.id)
+            return false;
+
+        // Mode is 'receive' only — no send config needed
+        if(data.mode === 'receive')
+            return false;
+
+        return true;
     }
 
     /** Get all configured relay accounts. Falls back to legacy single-account config. */

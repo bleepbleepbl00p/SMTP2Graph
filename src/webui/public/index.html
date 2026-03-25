@@ -118,6 +118,21 @@
                 </div>
             </div>
 
+            <!-- Setup Wizard (hidden by default, shown in setup mode) -->
+            <div id="setup-wizard" style="display: none; padding: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span id="wizard-step" style="font-weight: bold;">Step 1 of 4</span>
+                    <div style="flex: 1; margin: 0 16px; height: 2px; background: #808080;"></div>
+                </div>
+                <div id="wizard-content">
+                    <!-- Populated by JavaScript -->
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; padding-top: 8px; border-top: 1px solid #808080;">
+                    <button id="wizard-back" class="btn" style="display: none;">&lt; Back</button>
+                    <button id="wizard-next" class="btn">Next &gt;</button>
+                </div>
+            </div>
+
             <div class="status-bar">
                 <span id="statusbar-text">Ready</span>
                 <span id="statusbar-time"></span>
