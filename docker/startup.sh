@@ -21,4 +21,4 @@ YAML
 fi
 
 # Run SMTP2Graph
-exec node /usr/local/bin/smtp2graph.js --receive.port=587
+exec node /usr/local/bin/smtp2graph/server.js --receive.port=587

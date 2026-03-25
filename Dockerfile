@@ -11,11 +11,11 @@ COPY package.json package-lock.json /opt/smtp2graph/
 RUN cd /opt/smtp2graph && npm ci --omit=dev && rm package.json package-lock.json
 ENV NODE_PATH=/opt/smtp2graph/node_modules
 
-# Add SMTP2Graph binary (readable by all)
-COPY dist/server.js /usr/local/bin/smtp2graph.js
+# Add SMTP2Graph binary and chunks (readable by all)
+COPY dist/ /usr/local/bin/smtp2graph/
 COPY docker/startup.sh /usr/local/bin/startup.sh
 COPY docker/test.sh /usr/local/bin/test.sh
-RUN chmod 755 /usr/local/bin/startup.sh /usr/local/bin/test.sh /usr/local/bin/smtp2graph.js
+RUN chmod 755 /usr/local/bin/startup.sh /usr/local/bin/test.sh && chmod -R 755 /usr/local/bin/smtp2graph/
 
 # Add non-root user and set up data directory
 RUN addgroup -S smtp2graph && adduser -S smtp2graph -G smtp2graph
