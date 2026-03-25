@@ -39,6 +39,7 @@ module.exports = (env, argv) => ({
         'ajv': 'commonjs ajv',
         'helmet': 'commonjs helmet',
         'express-rate-limit': 'commonjs express-rate-limit',
+        'chokidar': 'commonjs chokidar',
     },
     plugins: [
         new webpack.DefinePlugin({

@@ -71,6 +71,10 @@ export class WebServer
 
         // Basic Auth
         this.#app.use((req: Request, res: Response, next: NextFunction) => {
+            // Setup status is public — needed before credentials are known
+            if(req.path === '/api/setup-status')
+                return next();
+
             const auth = req.headers.authorization;
             if(!auth || !auth.startsWith('Basic '))
             {
