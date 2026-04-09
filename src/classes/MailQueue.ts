@@ -256,6 +256,125 @@ export class MailQueue
         }
     }
 
+    /** List files in a queue folder with metadata */
+    listFiles(folder: 'queue'|'failed'|'temp'): {name: string, size: number, modified: string, account?: string}[]
+    {
+        const dir = folder === 'queue' ? this.#queuePath
+            : folder === 'failed' ? this.#failedPath
+            : this.#tempPath;
+
+        try {
+            return fs.readdirSync(dir)
+                .filter(f => f.endsWith('.eml'))
+                .map(name => {
+                    const filePath = path.join(dir, name);
+                    const stat = fs.statSync(filePath);
+                    let account: string | undefined;
+
+                    // Read sidecar for account info
+                    const metaPath = filePath.replace(/\.eml$/, '.meta.json');
+                    try {
+                        if(fs.existsSync(metaPath))
+                        {
+                            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+                            account = meta.accountName;
+                        }
+                    } catch {}
+
+                    const retry = this.#retryQueue.get(name);
+                    return {
+                        name,
+                        size: stat.size,
+                        modified: stat.mtime.toISOString(),
+                        account,
+                        ...(retry ? {retryCount: retry.retryCount, retryAfter: retry.retryAfter.toISOString()} : {}),
+                    };
+                })
+                .sort((a, b) => b.modified.localeCompare(a.modified));
+        } catch { return []; }
+    }
+
+    /** Delete a specific file from queue, failed, or temp */
+    deleteFile(folder: 'queue'|'failed'|'temp', filename: string): boolean
+    {
+        // Sanitize filename — prevent path traversal
+        const safe = path.basename(filename);
+        if(!safe.endsWith('.eml')) return false;
+
+        const dir = folder === 'queue' ? this.#queuePath
+            : folder === 'failed' ? this.#failedPath
+            : this.#tempPath;
+
+        const filePath = path.join(dir, safe);
+        try {
+            if(!fs.existsSync(filePath)) return false;
+            fs.unlinkSync(filePath);
+            this.#removeFromRetryQueue(safe);
+
+            // Also clean up sidecar
+            const metaPath = filePath.replace(/\.eml$/, '.meta.json');
+            try { if(fs.existsSync(metaPath)) fs.unlinkSync(metaPath); } catch {}
+
+            log('info', `Deleted "${safe}" from ${folder}`);
+            return true;
+        } catch(error) {
+            log('error', `Failed to delete "${safe}" from ${folder}`, {error});
+            return false;
+        }
+    }
+
+    /** Retry a failed message by moving it back to the queue */
+    retryFile(filename: string): boolean
+    {
+        const safe = path.basename(filename);
+        if(!safe.endsWith('.eml')) return false;
+
+        const src = path.join(this.#failedPath, safe);
+        const dest = path.join(this.#queuePath, safe);
+        try {
+            if(!fs.existsSync(src)) return false;
+            fs.renameSync(src, dest);
+
+            // Also move sidecar if it exists
+            const metaSrc = src.replace(/\.eml$/, '.meta.json');
+            const metaDest = dest.replace(/\.eml$/, '.meta.json');
+            try { if(fs.existsSync(metaSrc)) fs.renameSync(metaSrc, metaDest); } catch {}
+
+            log('info', `Moved "${safe}" from failed back to queue for retry`);
+            return true;
+        } catch(error) {
+            log('error', `Failed to retry "${safe}"`, {error});
+            return false;
+        }
+    }
+
+    /** Clear all files from a folder */
+    clearFolder(folder: 'queue'|'failed'|'temp'): number
+    {
+        const dir = folder === 'queue' ? this.#queuePath
+            : folder === 'failed' ? this.#failedPath
+            : this.#tempPath;
+
+        let count = 0;
+        try {
+            for(const file of fs.readdirSync(dir))
+            {
+                try {
+                    fs.unlinkSync(path.join(dir, file));
+                    if(file.endsWith('.eml'))
+                    {
+                        this.#removeFromRetryQueue(file);
+                        count++;
+                    }
+                } catch {}
+            }
+            log('info', `Cleared ${count} message(s) from ${folder}`);
+        } catch(error) {
+            log('error', `Failed to clear ${folder}`, {error});
+        }
+        return count;
+    }
+
     #ensureFolderStructure()
     {
         if(!this.#pathExists(this.#rootPath)?.isDirectory())

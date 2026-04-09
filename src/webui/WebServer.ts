@@ -9,6 +9,7 @@ import { ConfigService } from './services/ConfigService';
 import { configRoutes } from './routes/configRoutes';
 import { healthRoutes } from './routes/healthRoutes';
 import { accountRoutes } from './routes/accountRoutes';
+import { queueRoutes } from './routes/queueRoutes';
 
 const log = prefixedLog('WebUI');
 
@@ -53,9 +54,10 @@ export class WebServer
         this.#app.use(express.json());
 
         // Rate limiting — general (before auth)
+        // Dashboard polls every 10s (health + logs = 12 req/min = 180/15min)
         this.#app.use(rateLimit({
             windowMs: 15 * 60 * 1000, // 15 minutes
-            max: 50,
+            max: 300,
             standardHeaders: true,
             legacyHeaders: false,
             message: 'Too many requests, please try again later.',
@@ -184,8 +186,9 @@ export class WebServer
         }
         else
         {
-            // Full health routes — only available in normal mode
+            // Full health and queue routes — only available in normal mode
             this.#app.use('/api', healthRoutes(this.#queue!, this.#smtpServer!));
+            this.#app.use('/api', queueRoutes(this.#queue!));
         }
 
         // Static files — serve embedded HTML/JS/CSS
@@ -205,7 +208,7 @@ export class WebServer
         const listenAddress = Config.webuiListenAddress;
         const port = Config.webuiPort;
 
-        if(listenAddress === '0.0.0.0' || listenAddress === '::')
+        if((listenAddress === '0.0.0.0' || listenAddress === '::') && !this.#app.get('trust proxy'))
         {
             log('warn', 'WebUI is listening on all interfaces WITHOUT TLS. ' +
                 'Place behind a TLS-terminating reverse proxy or bind to 127.0.0.1.');
