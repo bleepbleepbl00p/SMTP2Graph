@@ -20,5 +20,8 @@ webui:
 YAML
 fi
 
+# Ensure schema file is available in working directory
+ln -sf /usr/local/bin/smtp2graph/config.schema.json /data/config.schema.json
+
 # Run SMTP2Graph
 exec node /usr/local/bin/smtp2graph/server.js --receive.port=587
