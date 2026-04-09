@@ -733,6 +733,21 @@
                     showAlert('Validation Error', 'Tenant and Client ID are required.');
                     return false;
                 }
+                const authMethod = document.querySelector('input[name="setup-auth-method"]:checked')?.value;
+                if(authMethod === 'certificate') {
+                    const thumbprint = document.getElementById('setup-acct-thumbprint').value;
+                    const keypath = document.getElementById('setup-acct-keypath').value;
+                    if(!thumbprint || !keypath) {
+                        showAlert('Validation Error', 'Certificate thumbprint and private key path are required.');
+                        return false;
+                    }
+                } else {
+                    const secret = document.getElementById('setup-acct-secret').value;
+                    if(!secret) {
+                        showAlert('Validation Error', 'Client secret is required.');
+                        return false;
+                    }
+                }
                 return true;
             }
             case 3:
@@ -746,22 +761,24 @@
     async function completeSetup() {
         const authMethod = document.querySelector('input[name="setup-auth-method"]:checked')?.value;
 
-        const account = {
-            name: document.getElementById('setup-acct-name')?.value || 'default',
-            appReg: {
-                tenant: document.getElementById('setup-acct-tenant')?.value,
-                id: document.getElementById('setup-acct-clientid')?.value,
-            }
+        var appReg = {
+            tenant: document.getElementById('setup-acct-tenant')?.value || '',
+            id: document.getElementById('setup-acct-clientid')?.value || '',
         };
 
         if(authMethod === 'certificate') {
-            account.appReg.certificate = {
-                thumbprint: document.getElementById('setup-acct-thumbprint')?.value,
-                privateKeyPath: document.getElementById('setup-acct-keypath')?.value,
+            appReg.certificate = {
+                thumbprint: document.getElementById('setup-acct-thumbprint')?.value || '',
+                privateKeyPath: document.getElementById('setup-acct-keypath')?.value || '',
             };
         } else {
-            account.appReg.secret = document.getElementById('setup-acct-secret')?.value;
+            appReg.secret = document.getElementById('setup-acct-secret')?.value || '';
         }
+
+        var account = {
+            name: document.getElementById('setup-acct-name')?.value || 'default',
+            appReg: appReg,
+        };
 
         const mailbox = document.getElementById('setup-acct-mailbox')?.value;
         if(mailbox) account.forceMailbox = mailbox;
