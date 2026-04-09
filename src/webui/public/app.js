@@ -5,6 +5,12 @@
 (function() {
     'use strict';
 
+    // Utilities
+    function escapeHtml(str) {
+        if(!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     // State
     let currentTab = 'dashboard';
     let healthPollInterval = null;
@@ -510,14 +516,19 @@
     // ---- Setup Wizard ----
     async function checkSetupMode() {
         try {
-            const res = await fetch('/api/setup-status');
-            const data = await res.json();
+            var res = await fetch('/api/setup-status', {credentials: 'same-origin'});
+            if(!res.ok) {
+                console.warn('setup-status returned ' + res.status);
+                return false;
+            }
+            var data = await res.json();
+            console.log('setup-status:', data);
             if(data.setupMode) {
                 showSetupWizard();
                 return true;
             }
         } catch(e) {
-            // If endpoint doesn't exist, we're in normal mode
+            console.error('checkSetupMode error:', e);
         }
         return false;
     }
