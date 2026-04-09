@@ -25,6 +25,7 @@ export class WebServer
         this.#smtpServer = smtpServer;
         this.#setupMode = (queue === null || smtpServer === null);
         this.#app = express();
+        this.#app.set('trust proxy', 1); // Trust first reverse proxy (Caddy, nginx, etc.)
 
         this.#setupMiddleware();
         this.#setupRoutes();
