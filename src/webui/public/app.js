@@ -35,6 +35,7 @@
 
         if(tabName === 'accounts') loadAccounts();
         if(tabName === 'config') loadConfig();
+        if(tabName === 'queue') loadQueue();
     }
 
     // ---- Fetch helpers ----
@@ -475,6 +476,149 @@
     });
 
     document.getElementById('btn-reload-config').addEventListener('click', loadConfig);
+
+    // ---- Mail Queue ----
+    function loadQueue() {
+        var folder = document.getElementById('queue-folder-select').value;
+        loadQueueFolder(folder);
+    }
+
+    async function loadQueueFolder(folder) {
+        try {
+            var res = await apiFetch('/api/queue/' + folder);
+            var files = await res.json();
+            renderQueueFiles(files, folder);
+            setStatus(files.length + ' message(s) in ' + folder);
+        } catch(e) {
+            setStatus('Failed to load queue');
+        }
+    }
+
+    function renderQueueFiles(files, folder) {
+        var body = document.getElementById('queue-rows');
+        body.innerHTML = '';
+
+        if(files.length === 0) {
+            var p = document.createElement('p');
+            p.className = 'placeholder';
+            p.textContent = 'No messages in ' + folder + '.';
+            body.appendChild(p);
+            return;
+        }
+
+        files.forEach(function(file) {
+            var row = document.createElement('div');
+            row.className = 'listview-row';
+
+            var status = '';
+            if(file.retryCount) {
+                status = 'Retry ' + file.retryCount;
+            } else if(folder === 'failed') {
+                status = 'Failed';
+            } else if(folder === 'temp') {
+                status = 'Receiving';
+            } else {
+                status = 'Queued';
+            }
+
+            row.innerHTML =
+                '<span class="col-qname" title="' + escapeHtml(file.name) + '">' + escapeHtml(file.name) + '</span>' +
+                '<span class="col-qsize">' + formatSize(file.size) + '</span>' +
+                '<span class="col-qacct">' + escapeHtml(file.account || '\u2014') + '</span>' +
+                '<span class="col-qdate">' + formatDate(file.modified) + '</span>' +
+                '<span class="col-qstatus">' + status + '</span>' +
+                '<span class="col-qactions"></span>';
+
+            var actions = row.querySelector('.col-qactions');
+
+            if(folder === 'failed') {
+                var retryBtn = document.createElement('button');
+                retryBtn.className = 'btn';
+                retryBtn.textContent = 'Retry';
+                retryBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    retryQueueFile(file.name);
+                });
+                actions.appendChild(retryBtn);
+            }
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'btn';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                deleteQueueFile(folder, file.name);
+            });
+            actions.appendChild(delBtn);
+
+            body.appendChild(row);
+        });
+    }
+
+    async function deleteQueueFile(folder, filename) {
+        if(!confirm('Delete "' + filename + '" from ' + folder + '?')) return;
+        try {
+            var res = await apiFetch('/api/queue/' + folder + '/' + encodeURIComponent(filename), {method: 'DELETE'});
+            if(res.ok) {
+                loadQueue();
+            } else {
+                var data = await res.json();
+                showAlert('Error', data.error || 'Failed to delete');
+            }
+        } catch(e) {
+            showAlert('Error', 'Network error');
+        }
+    }
+
+    async function retryQueueFile(filename) {
+        try {
+            var res = await apiFetch('/api/queue/failed/' + encodeURIComponent(filename) + '/retry', {method: 'POST'});
+            if(res.ok) {
+                loadQueue();
+            } else {
+                var data = await res.json();
+                showAlert('Error', data.error || 'Failed to retry');
+            }
+        } catch(e) {
+            showAlert('Error', 'Network error');
+        }
+    }
+
+    async function clearQueueFolder() {
+        var folder = document.getElementById('queue-folder-select').value;
+        if(!confirm('Delete ALL messages from ' + folder + '? This cannot be undone.')) return;
+        try {
+            var res = await apiFetch('/api/queue/' + folder, {method: 'DELETE'});
+            if(res.ok) {
+                var data = await res.json();
+                showAlert('Cleared', 'Removed ' + data.cleared + ' message(s) from ' + folder + '.');
+                loadQueue();
+            } else {
+                showAlert('Error', 'Failed to clear folder');
+            }
+        } catch(e) {
+            showAlert('Error', 'Network error');
+        }
+    }
+
+    function formatSize(bytes) {
+        if(bytes < 1024) return bytes + ' B';
+        if(bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function formatDate(iso) {
+        try {
+            var d = new Date(iso);
+            return d.toLocaleString();
+        } catch(e) {
+            return iso;
+        }
+    }
+
+    document.getElementById('btn-refresh-queue').addEventListener('click', loadQueue);
+    document.getElementById('btn-clear-queue').addEventListener('click', clearQueueFolder);
+    document.getElementById('queue-folder-select').addEventListener('change', loadQueue);
 
     // ---- Alert Dialog ----
     function showAlert(title, message) {

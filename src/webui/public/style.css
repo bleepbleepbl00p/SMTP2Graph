@@ -319,6 +319,13 @@ textarea.field {
 .col-from { flex: 1; min-width: 160px; }
 .col-actions { width: 160px; }
 
+.col-qname { width: 220px; }
+.col-qsize { width: 80px; }
+.col-qacct { width: 120px; }
+.col-qdate { width: 160px; }
+.col-qstatus { width: 100px; }
+.col-qactions { width: 180px; }
+
 .listview-body {
     max-height: 400px;
     overflow-y: auto;

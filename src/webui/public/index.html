@@ -28,6 +28,7 @@
                 <button class="tab active" data-tab="dashboard">System Monitor</button>
                 <button class="tab" data-tab="accounts">Network Accounts</button>
                 <button class="tab" data-tab="config">System Properties</button>
+                <button class="tab" data-tab="queue">Mail Queue</button>
             </div>
 
             <div class="tab-content" id="tab-dashboard">
@@ -115,6 +116,29 @@
                 </div>
                 <div id="config-form" class="config-form">
                     <p class="placeholder">Loading configuration...</p>
+                </div>
+            </div>
+
+            <div id="tab-queue" class="tab-content hidden">
+                <div class="toolbar">
+                    <select id="queue-folder-select" class="field" style="width: 120px;">
+                        <option value="queue">Queue</option>
+                        <option value="failed">Failed</option>
+                        <option value="temp">Temp</option>
+                    </select>
+                    <button class="btn" id="btn-refresh-queue">Refresh</button>
+                    <button class="btn" id="btn-clear-queue" style="margin-left: auto;">Clear All</button>
+                </div>
+                <div class="listview">
+                    <div class="listview-header">
+                        <span class="col-qname">Filename</span>
+                        <span class="col-qsize">Size</span>
+                        <span class="col-qacct">Account</span>
+                        <span class="col-qdate">Modified</span>
+                        <span class="col-qstatus">Status</span>
+                        <span class="col-qactions">Actions</span>
+                    </div>
+                    <div class="listview-body" id="queue-rows"></div>
                 </div>
             </div>
 
