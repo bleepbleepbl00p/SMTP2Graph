@@ -17,10 +17,29 @@ module.exports = (env, argv) => ({
                 test: /\.ts$/,
                 loader: 'ts-loader'
             },
+            // Embed WebUI static files as strings
+            {
+                test: /\.(html|css)$/,
+                include: path.resolve(__dirname, 'src/webui/public'),
+                type: 'asset/source',
+            },
+            {
+                test: /\.js$/,
+                include: path.resolve(__dirname, 'src/webui/public'),
+                type: 'asset/source',
+            },
         ],
     },
     resolve: {
         extensions: ['.ts', '.js'],
+    },
+    // Runtime dependencies — not bundled by webpack
+    externals: {
+        'express': 'commonjs express',
+        'ajv': 'commonjs ajv',
+        'helmet': 'commonjs helmet',
+        'express-rate-limit': 'commonjs express-rate-limit',
+        'chokidar': 'commonjs chokidar',
     },
     plugins: [
         new webpack.DefinePlugin({

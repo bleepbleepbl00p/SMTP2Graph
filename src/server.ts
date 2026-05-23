@@ -16,13 +16,45 @@ else
             process.exit(1);
         }
 
-        const queue = new MailQueue();
-        const server = new SMTPServer(queue);
-        try {
-            await server.listen();
-        } catch(error) {
-            log('error', `Failed to start SMTP server. ${String(error)}`, {error});
-            process.exit(1);
+        if(Config.setupMode)
+        {
+            log('info', 'Setup Mode — no send configuration found.');
+            log('info', `Complete setup via WebUI at http://${Config.webuiListenAddress}:${Config.webuiPort}`);
+
+            try {
+                const { WebServer } = await import('./webui/WebServer');
+                const webServer = new WebServer(null, null);
+                await webServer.listen();
+            } catch(error) {
+                log('error', `Failed to start WebUI. ${String(error)}`, {error});
+                process.exit(1);
+            }
+
+            log('info', 'Waiting for configuration to be completed via WebUI...');
+        }
+        else
+        {
+            const queue = new MailQueue();
+            const server = new SMTPServer(queue);
+            try {
+                await server.listen();
+            } catch(error) {
+                log('error', `Failed to start SMTP server. ${String(error)}`, {error});
+                process.exit(1);
+            }
+
+            // Start WebUI if enabled
+            if(Config.webuiEnabled)
+            {
+                try {
+                    const { WebServer } = await import('./webui/WebServer');
+                    const webServer = new WebServer(queue, server);
+                    await webServer.listen();
+                } catch(error) {
+                    log('error', `Failed to start WebUI. ${String(error)}`, {error});
+                    // Don't exit — SMTP relay still works without WebUI
+                }
+            }
         }
     })();
 }
